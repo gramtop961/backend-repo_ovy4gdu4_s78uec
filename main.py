@@ -1,8 +1,12 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+from database import create_document, get_documents, db
+from schemas import BlogPost, ContactMessage
 
-app = FastAPI()
+app = FastAPI(title="SaaS VR Landing API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,38 +35,76 @@ def test_database():
         "connection_status": "Not Connected",
         "collections": []
     }
-    
+
     try:
-        # Try to import database module
-        from database import db
-        
         if db is not None:
             response["database"] = "✅ Available"
             response["database_url"] = "✅ Configured"
             response["database_name"] = db.name if hasattr(db, 'name') else "✅ Connected"
             response["connection_status"] = "Connected"
-            
-            # Try to list collections to verify connectivity
+
             try:
                 collections = db.list_collection_names()
-                response["collections"] = collections[:10]  # Show first 10 collections
+                response["collections"] = collections[:10]
                 response["database"] = "✅ Connected & Working"
             except Exception as e:
                 response["database"] = f"⚠️  Connected but Error: {str(e)[:50]}"
         else:
             response["database"] = "⚠️  Available but not initialized"
-            
-    except ImportError:
-        response["database"] = "❌ Database module not found (run enable-database first)"
+
     except Exception as e:
         response["database"] = f"❌ Error: {str(e)[:50]}"
-    
-    # Check environment variables
+
     import os
     response["database_url"] = "✅ Set" if os.getenv("DATABASE_URL") else "❌ Not Set"
     response["database_name"] = "✅ Set" if os.getenv("DATABASE_NAME") else "❌ Not Set"
-    
+
     return response
+
+# ---------- Blog endpoints ----------
+
+@app.get("/api/blog", response_model=List[BlogPost])
+async def list_blog_posts(limit: int = 20):
+    docs = get_documents("blogpost", {}, limit)
+    # Convert Mongo docs to plain dict (strip _id)
+    posts: List[BlogPost] = []
+    for d in docs:
+        d.pop("_id", None)
+        posts.append(BlogPost(**d))
+    return posts
+
+class BlogCreate(BaseModel):
+    title: str
+    slug: str
+    excerpt: Optional[str] = None
+    content: str
+    author: Optional[str] = None
+    tags: Optional[List[str]] = []
+    published: bool = True
+
+@app.post("/api/blog", status_code=201)
+async def create_blog_post(payload: BlogCreate):
+    try:
+        post = BlogPost(**payload.model_dump())
+        inserted_id = create_document("blogpost", post)
+        return {"id": inserted_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# ---------- Contact endpoint ----------
+class ContactIn(BaseModel):
+    name: str
+    email: EmailStr
+    message: str
+
+@app.post("/api/contact", status_code=201)
+async def submit_contact(form: ContactIn):
+    try:
+        msg = ContactMessage(**form.model_dump())
+        inserted_id = create_document("contactmessage", msg)
+        return {"status": "ok", "id": inserted_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 if __name__ == "__main__":

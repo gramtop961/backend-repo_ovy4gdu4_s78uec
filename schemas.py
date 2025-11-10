@@ -8,41 +8,51 @@ Each Pydantic model represents a collection in your database.
 Model name is converted to lowercase for the collection name:
 - User -> "user" collection
 - Product -> "product" collection
-- BlogPost -> "blogs" collection
+- BlogPost -> "blogpost" collection
+- ContactMessage -> "contactmessage" collection
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, List
 
-# Example schemas (replace with your own):
-
-class User(BaseModel):
+class AuthUser(BaseModel):
     """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
+    Auth users collection schema
+    Collection name: "authuser"
     """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    email: EmailStr = Field(..., description="User email (unique)")
+    password_hash: str = Field(..., description="BCrypt password hash")
+    name: Optional[str] = Field(None, description="Display name")
 
-class Product(BaseModel):
+class BlogPost(BaseModel):
     """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
+    Blog posts collection schema
+    Collection name: "blogpost"
     """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+    title: str = Field(..., description="Post title")
+    slug: str = Field(..., description="URL-friendly slug")
+    excerpt: Optional[str] = Field(None, description="Short summary")
+    content: str = Field(..., description="Markdown or HTML content")
+    author: Optional[str] = Field(None, description="Author name")
+    tags: Optional[List[str]] = Field(default_factory=list, description="Tags")
+    published: bool = Field(default=True, description="Publish status")
 
-# Add your own schemas here:
-# --------------------------------------------------
+class ContactMessage(BaseModel):
+    """
+    Contact messages collection schema
+    Collection name: "contactmessage"
+    """
+    name: str = Field(..., description="Sender name")
+    email: EmailStr = Field(..., description="Sender email")
+    message: str = Field(..., description="Message body")
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+# You can extend with more collections if needed (e.g., TeamMember)
+class TeamMember(BaseModel):
+    """
+    Team members collection schema
+    Collection name: "teammember"
+    """
+    name: str
+    role: str
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
